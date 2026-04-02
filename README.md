@@ -137,7 +137,3 @@ Runtime result object:
 
 - Current demo includes debug drawing for face and hand landmarks.
 - For production, you may remove debug drawing for better FPS.
-
-## License
-
-Add your preferred license here (for example, MIT).
