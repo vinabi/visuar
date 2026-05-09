@@ -7,7 +7,7 @@
 Run the start script that will launch both servers:
 
 ```powershell
-cd e:\supabase
+cd e:\visuar\Visuar
 .\start-servers.ps1
 ```
 
@@ -21,7 +21,7 @@ This will open two terminal windows:
 #### Terminal 1 - Backend
 
 ```powershell
-cd e:\supabase\supabase
+cd e:\visuar\Visuar\supabase
 .\.venv\Scripts\Activate.ps1
 uvicorn main:app --reload --port 8000
 ```
@@ -29,7 +29,7 @@ uvicorn main:app --reload --port 8000
 #### Terminal 2 - Frontend
 
 ```powershell
-cd e:\supabase\vision-test-react
+cd e:\visuar\Visuar\vision-test-react
 npm run dev
 ```
 

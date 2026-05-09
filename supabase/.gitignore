@@ -1,1 +1,11 @@
 .env
+.env.local
+.env.*.local
+node_modules/
+dist/
+build/
+*.log
+.DS_Store
+.venv
+venv
+__pycache__

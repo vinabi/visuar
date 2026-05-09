@@ -1,4 +1,5 @@
 import { Link, useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import {
   ArrowLeft,
   Plus,
@@ -8,6 +9,7 @@ import {
   Eye,
   Settings,
   LogOut,
+  Loader2,
 } from "lucide-react";
 import { useTranslation } from "react-i18next";
 import { Button } from "@/components/ui/Button";
@@ -17,11 +19,16 @@ import { LanguageSelector } from "@/components/LanguageSelector";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 
+const API_URL = "http://localhost:8000";
+
 export default function DashboardPage() {
   const { t } = useTranslation();
   const { isDarkMode } = useTheme();
   const navigate = useNavigate();
-  const { signOut, user } = useAuth();
+  const { signOut, user, session } = useAuth();
+
+  const [testHistory, setTestHistory] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(true);
 
   const handleLogout = async () => {
     await signOut();
@@ -30,59 +37,48 @@ export default function DashboardPage() {
 
   // Get user's display name
   const getUserName = () => {
-    if (user?.user_metadata?.full_name) {
-      return user.user_metadata.full_name;
-    }
-    if (user?.email) {
-      return user.email.split("@")[0];
-    }
+    if (user?.user_metadata?.full_name) return user.user_metadata.full_name;
+    if (user?.email) return user.email.split("@")[0];
     return "User";
   };
 
-  const testHistory = [
-    {
-      id: 1,
-      date: "2025-01-15",
-      type: "Snellen Acuity",
-      score: 87,
-      status: "good",
-    },
-    {
-      id: 2,
-      date: "2025-01-08",
-      type: "Rapid Recognition",
-      score: 90,
-      status: "excellent",
-    },
-    {
-      id: 3,
-      date: "2025-01-01",
-      type: "Contrast Sensitivity",
-      score: 88,
-      status: "good",
-    },
-    {
-      id: 4,
-      date: "2024-12-25",
-      type: "Sustained Focus",
-      score: 85,
-      status: "good",
-    },
-    {
-      id: 5,
-      date: "2024-12-18",
-      type: "Near-Far Switching",
-      score: 82,
-      status: "good",
-    },
-  ];
+  // Fetch real test history from database
+  useEffect(() => {
+    const fetchHistory = async () => {
+      if (!session?.access_token) { setHistoryLoading(false); return; }
+      try {
+        const res = await fetch(`${API_URL}/api/test-results`, {
+          headers: { Authorization: `Bearer ${session.access_token}` },
+        });
+        if (res.ok) {
+          const data = await res.json();
+          setTestHistory(
+            data.map((r) => ({
+              id: r.id,
+              date: r.created_at,
+              type: r.test_type === "snellen-acuity" ? "Snellen Acuity" : r.test_type,
+              score: r.overall_score,
+              left_acuity: r.left_eye_acuity,
+              right_acuity: r.right_eye_acuity,
+              status: r.overall_score >= 80 ? "excellent" : r.overall_score >= 50 ? "good" : "poor",
+            }))
+          );
+        }
+      } catch (err) {
+        console.error("[Dashboard] Failed to fetch history:", err);
+      }
+      setHistoryLoading(false);
+    };
+    fetchHistory();
+  }, [session]);
 
-  const averageScore = Math.round(
-    testHistory.reduce((sum, test) => sum + test.score, 0) / testHistory.length
-  );
-  const latestScore = testHistory[0].score;
-  const scoreImprovement =
-    latestScore - testHistory[testHistory.length - 1].score;
+  const averageScore = testHistory.length > 0
+    ? Math.round(testHistory.reduce((sum, t) => sum + t.score, 0) / testHistory.length)
+    : 0;
+  const latestScore = testHistory.length > 0 ? testHistory[0].score : 0;
+  const scoreImprovement = testHistory.length >= 2
+    ? testHistory[0].score - testHistory[testHistory.length - 1].score
+    : 0;
 
   return (
     <div
@@ -417,7 +413,19 @@ export default function DashboardPage() {
             </div>
 
             <div className="space-y-4">
-              {testHistory.map((test) => (
+              {historyLoading ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className={`w-8 h-8 animate-spin ${isDarkMode ? "text-cyan-400" : "text-cyan-600"}`} />
+                  <span className={`ml-3 text-lg ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>Loading history…</span>
+                </div>
+              ) : testHistory.length === 0 ? (
+                <div className={`text-center py-12 rounded-xl border ${isDarkMode ? "border-slate-700/50 bg-slate-800/20" : "border-slate-200 bg-slate-50"}`}>
+                  <Eye className={`w-10 h-10 mx-auto mb-3 ${isDarkMode ? "text-slate-600" : "text-slate-300"}`} />
+                  <p className={`text-lg font-medium ${isDarkMode ? "text-slate-400" : "text-slate-500"}`}>No tests yet</p>
+                  <p className={`text-sm mt-1 ${isDarkMode ? "text-slate-500" : "text-slate-400"}`}>Complete your first vision test to see results here.</p>
+                </div>
+              ) : (
+              testHistory.map((test) => (
                 <div
                   key={test.id}
                   className={`flex flex-col md:flex-row md:items-center justify-between gap-4 p-5 rounded-xl border hover:shadow-md transition-all ${
@@ -502,7 +510,8 @@ export default function DashboardPage() {
                     </Link>
                   </div>
                 </div>
-              ))}
+              ))
+              )}
             </div>
           </div>
         </div>

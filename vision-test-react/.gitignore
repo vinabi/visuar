@@ -1,0 +1,8 @@
+node_modules
+.venv
+.env
+*.env
+*.pyc
+*.md
+*.ps1
+__pycache__

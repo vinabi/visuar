@@ -1,5 +1,6 @@
 # models.py
-from sqlalchemy import Column, ForeignKey, Integer, String
+from sqlalchemy import Column, ForeignKey, Integer, String, Float, DateTime
+from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.ext.declarative import declarative_base
 
@@ -13,6 +14,9 @@ class User(Base):
 
     profile = relationship("Profile", back_populates="user", uselist=False,
                            cascade="all, delete-orphan", passive_deletes=True)
+    test_results = relationship("TestResult", back_populates="user",
+                                cascade="all, delete-orphan", passive_deletes=True,
+                                order_by="TestResult.created_at.desc()")
 
 class Profile(Base):
     __tablename__ = "profile"
@@ -34,3 +38,17 @@ class Profile(Base):
     water_intake = Column(String, nullable=True)
 
     user = relationship("User", back_populates="profile")
+
+class TestResult(Base):
+    __tablename__ = "test_results"
+    id = Column(Integer, primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"))
+    test_type = Column(String, default="snellen-acuity")
+    left_eye_acuity = Column(String, nullable=True)
+    right_eye_acuity = Column(String, nullable=True)
+    left_eye_diopter = Column(Float, nullable=True)
+    right_eye_diopter = Column(Float, nullable=True)
+    overall_score = Column(Integer, default=0)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+
+    user = relationship("User", back_populates="test_results")

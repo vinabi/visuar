@@ -1,6 +1,7 @@
 # schemas.py
 from pydantic import BaseModel, EmailStr
 from typing import Optional
+from datetime import datetime
 
 class UserCreate(BaseModel):
     email: EmailStr
@@ -35,5 +36,28 @@ class ProfileCreate(ProfileBase):
 class ProfileResponse(ProfileBase):
     id: int
     user_id: int
+    class Config:
+        from_attributes = True
+
+# ─── Test Results ────────────────────────────────────────
+
+class TestResultCreate(BaseModel):
+    test_type: str = "snellen-acuity"
+    left_eye_acuity: Optional[str] = None
+    right_eye_acuity: Optional[str] = None
+    left_eye_diopter: Optional[float] = None
+    right_eye_diopter: Optional[float] = None
+    overall_score: int = 0
+
+class TestResultResponse(BaseModel):
+    id: int
+    user_id: int
+    test_type: str
+    left_eye_acuity: Optional[str] = None
+    right_eye_acuity: Optional[str] = None
+    left_eye_diopter: Optional[float] = None
+    right_eye_diopter: Optional[float] = None
+    overall_score: int
+    created_at: datetime
     class Config:
         from_attributes = True

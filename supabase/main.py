@@ -1,13 +1,17 @@
 # main.py
-from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi import FastAPI, Request, Depends, HTTPException, status, WebSocket, WebSocketDisconnect
+import cv2
+import numpy as np
+import base64
+from vision_module.vision import VisionModule
 from fastapi.responses import HTMLResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 import os
 from pathlib import Path
 from supabase import create_client, Client
-from schemas import UserCreate, UserResponse, ProfileCreate, ProfileResponse
-from crud import create_user, get_user_by_email, get_profile_by_user_id, upsert_profile
+from schemas import UserCreate, UserResponse, ProfileCreate, ProfileResponse, TestResultCreate, TestResultResponse
+from crud import create_user, get_user_by_email, get_profile_by_user_id, upsert_profile, create_test_result, get_test_results_by_user
 from database import get_db, init_db
 from models import User
 
@@ -23,10 +27,13 @@ if not all([SUPABASE_URL, SUPABASE_KEY]):
 
 supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
+vision_module_instance = VisionModule()
+
 app = FastAPI()
 
 @app.on_event("startup")
 async def startup_event():
+    vision_module_instance.start()
     try:
         await init_db()
     except Exception as e:
@@ -98,3 +105,58 @@ async def read_profile(request: Request, db=Depends(get_db)):
     if not profile:
         raise HTTPException(status_code=404, detail="Profile not found")
     return profile
+
+# --- VISION MODULE ENDPOINTS ---
+@app.websocket("/ws/vision")
+async def vision_websocket(websocket: WebSocket):
+    await websocket.accept()
+    try:
+        while True:
+            data = await websocket.receive_text()
+            if "," in data:
+                data = data.split(",")[1]
+            try:
+                img_data = base64.b64decode(data)
+                np_arr = np.frombuffer(img_data, np.uint8)
+                frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+                if frame is not None:
+                    result = vision_module_instance.process_frame(frame)
+                    await websocket.send_json(result)
+            except Exception as e:
+                print(f"Vision processing error: {e}")
+    except WebSocketDisconnect:
+        pass
+
+@app.post("/api/vision/calibrate")
+async def calibrate_vision(data: dict):
+    img_b64 = data.get("image")
+    distance = data.get("distance", 50.0)
+    if not img_b64:
+        raise HTTPException(status_code=400, detail="No image provided")
+    
+    if "," in img_b64:
+        img_b64 = img_b64.split(",")[1]
+        
+    try:
+        img_data = base64.b64decode(img_b64)
+        np_arr = np.frombuffer(img_data, np.uint8)
+        frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
+        
+        if frame is not None:
+            success = vision_module_instance.calibrate(frame, distance)
+            return {"success": success}
+        return {"success": False, "error": "Invalid frame"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+# --- TEST RESULTS ENDPOINTS ---
+@app.post("/api/test-results", response_model=TestResultResponse, status_code=status.HTTP_201_CREATED)
+async def save_test_result(payload: TestResultCreate, request: Request, db=Depends(get_db)):
+    cur = await get_current_user(request, db)
+    return await create_test_result(db, cur["db"].id, payload)
+
+@app.get("/api/test-results")
+async def list_test_results(request: Request, db=Depends(get_db)):
+    cur = await get_current_user(request, db)
+    results = await get_test_results_by_user(db, cur["db"].id)
+    return results
